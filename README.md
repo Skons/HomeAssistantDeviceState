@@ -50,7 +50,7 @@ while ($true) {
 stop-transcript
 ```
 
-This ps1 looks for \Device\00000060 in the process svchost. The ProcessName can be left out, but it is wise to limit this to a specific ProcessName. Without any ProcessName specified Handle.exe uses a lot of process power. Multiple processes can be added seperated by a comma. If you'll need to add another process, you can use the command below while your device is in use.
+This ps1 looks for \Device\00000060 in the process svchost. The ProcessName can be left out, but it is wise to limit this to a specific ProcessName. Without any ProcessName specified, Handle.exe uses a lot of process power. Multiple processes can be added seperated by a comma. If you'll need to find another process, you can use the command below while your device is in use.
 ```Powershell
  Get-DeviceInUseByProcess -Handle .\handle64.exe -PDO \device\0000600 -Verbose
  ```
@@ -60,3 +60,5 @@ The ps1 can be used to be started through the task scheduler. Point the action t
 -nop -exec bypass -command "& 'Path\To\PowershellScript.ps1'"
 ```
 A trigger that works is "At logon" with "Repeat the task every 1 minute". The script keeps on running in the backgrond, but if it crashes for some reason, it will be started again.
+
+If you do not point to the exact location of handle.exe, and it is in the same directory as your ps1, make sure the "Start in" configuration in the scheduled task points to the directory of you ps1.
