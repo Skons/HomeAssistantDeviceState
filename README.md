@@ -4,7 +4,7 @@ This module allows you to set an Home Assistant entity based on the usage of a d
 ## Getting started
 Download handle.exe from https://docs.microsoft.com/en-us/sysinternals/downloads/handle
 
-Launch Powershell and execute the following command
+Launch Powershell and execute the following command, make sure PowershellGet is up-to-date
 ```Powershell
 Install-Module -Name Microsoft.PowerShell.SecretsManagement -RequiredVersion 0.2.0-alpha1 -AllowPrerelease
 ```
