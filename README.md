@@ -55,10 +55,10 @@ This ps1 looks for \Device\00000060 in the process svchost. The ProcessName can 
  Get-DeviceInUseByProcess -Handle .\handle64.exe -PDO \device\0000600 -Verbose
  ```
 
-The ps1 can be used to be started through the task scheduler. Point the action to powershell/pwsh with the arguments below
+The ps1 can be used to be started through the task scheduler. Point the action to powershell/pwsh with the arguments below and run in as the same user that will use the device.
 ```
 -nop -exec bypass -command "& 'Path\To\PowershellScript.ps1'"
 ```
 A trigger that works is "At logon" with "Repeat the task every 1 minute". The script keeps on running in the backgrond, but if it crashes for some reason, it will be started again.
 
-If you do not point to the exact location of handle.exe, and it is in the same directory as your ps1, make sure the "Start in" configuration in the scheduled task points to the directory of you ps1.
+If you do not point to the exact location of handle.exe, and it is in the same directory as your ps1, make sure the "Start in" configuration in the scheduled task points to the directory of your ps1.
