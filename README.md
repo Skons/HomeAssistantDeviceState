@@ -2,7 +2,7 @@
 This module allows you to set an Home Assistant entity based on the usage of a device within in Windows. It is mainly developed for detecting camera usage within teams, but microphones can also be detected. Handle.exe from sysinternals is used to detect a handle of a process to the specified device. The module has been tested on Powershell 5 and 7.
 
 ## Getting started
-Download handle.exe from https://docs.microsoft.com/en-us/sysinternals/downloads/handle
+Download handle.exe from https://docs.microsoft.com/en-us/sysinternals/downloads/handle. After downloading you should execute one of the executables to accept the EULA.
 
 Launch Powershell and execute the following command, make sure PowershellGet is up-to-date
 ```Powershell
