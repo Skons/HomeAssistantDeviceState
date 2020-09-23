@@ -50,9 +50,12 @@ $VerbosePreference = 'Continue'
 
 Import-Module $PSScriptRoot\HomeAssistantDeviceState.psd1
 
+#Sometimes the PDO changes after a reboot, use this to always have the right PDO
+$DevicePDO = $(Get-DevicePDO).where({$_.FriendlyName -eq 'Some Camera Name' -and $_.DeviceClass -eq 'Camera'})
+
 while ($true) {
     Write-Verbose "Starting @ '$(get-date)'"
-    Set-HAEntityStateByDeviceInUse -ProcessName svchost -Handle .\handle64.exe -PDO "\Device\00000060" -Uri "http://hassio.local:8123/" -Entity 'input_boolean.camera' -FoundStateValue 'On' -NotFoundStateValue 'Off' -SecretName HAToken -verbose
+    Set-HAEntityStateByDeviceInUse -ProcessName svchost -Handle .\handle64.exe -PDO $DevicePDO.PDO -Uri "http://hassio.local:8123/" -Entity 'input_boolean.camera' -FoundStateValue 'On' -NotFoundStateValue 'Off' -SecretName HAToken -verbose
     start-sleep -Seconds 10
 }
 
