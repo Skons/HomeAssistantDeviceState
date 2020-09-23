@@ -67,7 +67,7 @@ This ps1 looks for \Device\00000060 in the process svchost. The ProcessName can 
  Get-DeviceInUseByProcess -Handle .\handle64.exe -PDO \device\0000600 -Verbose
  ```
 
-The ps1 can be used to be started through the task scheduler. Point the action to powershell/pwsh with the arguments below and run in as the same user that will use the device.
+The ps1 can be used to be started through the task scheduler. Point the action to powershell/pwsh with the arguments below and run in as the same user that will use the device. You can also run it as SYSTEM, but then you will have to add the secret as SYSTEM. This can be done with psexec, or you can run the .ps1 one time as SYSTEM with Add-Secret.
 ```
 -nop -exec bypass -command "& 'Path\To\PowershellScript.ps1'"
 ```
