@@ -14,6 +14,8 @@ Function Get-DevicePDO {
 		Get-DevicePDO
 	.EXAMPLE
 		Get-DevicePDO -DeviceClass camera
+	.EXAMPLE
+		Get-DevicePDO -FriendlyName "Some Camera Name"
 	#>
 	[CmdLetBinding(DefaultParameterSetName='DeviceClass')]
 	param(
@@ -50,6 +52,8 @@ Function Get-DeviceInUseByProcess {
 		Provide one or more (partial) process names to search the device handle
 	.PARAMETER PDO
 		The Physical Device Object name of the device to search the handle for
+	.PARAMETER AcceptEula
+		Force AcceptEula on Handle.exe
 	.EXAMPLE
 		Get-DeviceInUseByProcess -Handle .\handle64.exe -PDO \device\00000059
 	#>
@@ -60,20 +64,27 @@ Function Get-DeviceInUseByProcess {
 		[Parameter(Mandatory=$False)]
 		[string[]]$ProcessName,
 		[Parameter(Mandatory=$True)]
-		[string]$PDO
+		[string]$PDO,
+		[Parameter(Mandatory=$False)]
+		[switch]$AcceptEula
 	)
  
+	$AcceptEulaCommandLine = $null
+	if ($AcceptEula) {
+		$AcceptEulaCommandLine = "/accepteula"
+	}
+
 	$Objects = @()
 	$HandleData = @()
 	if ($ProcessName) {
 		foreach ($ProcName in $ProcessName) {
 			Write-Verbose "Getting handles for process '$ProcName'"
-			$HandleData += . $Handle -p $ProcName -a -nobanner
+			$HandleData += . $Handle -p $ProcName -a -nobanner $AcceptEulaCommandLine
 		}
 	}
 	else {
 		Write-Verbose "Getting all process handles"
-		$HandleData += . $Handle -a -nobanner
+		$HandleData += . $Handle -a -nobanner $AcceptEulaCommandLine
 	}
 	$Regex = "(^\S+)(\W+)(pid:)(\W+)(\d+)(\W+).*"
 	for ($i=0;$i-lt$HandleData.Count;$i++) {
@@ -132,6 +143,8 @@ Function Set-HAEntityStateByDeviceInUse {
 		The name of the secret in your vault that has the HA Long Lived Access Token
 	.PARAMETER Force
 		If you want to force check the current state at HA, instead of relying on the state in memory of this module, specify this parameter
+	.PARAMETER AcceptEula
+		See Get-DeviceInUseByProcess
 	.NOTES
 		Install-Module -Name Microsoft.PowerShell.SecretsManagement -RequiredVersion 0.2.0-alpha1 -AllowPrerelease
 	.EXAMPLE
@@ -160,6 +173,8 @@ Function Set-HAEntityStateByDeviceInUse {
 		[Parameter(Mandatory=$True)]
 		[string]$SecretName,
 		[Parameter(Mandatory=$False)]
+		[switch]$AcceptEula,
+		[Parameter(Mandatory=$False)]
 		[switch]$Force
 	)
 
@@ -178,6 +193,9 @@ Function Set-HAEntityStateByDeviceInUse {
 	$DeviceInUseByProcessParams = @{}
 	if ($ProcessName) {
 		$DeviceInUseByProcessParams['ProcessName'] = $ProcessName
+	}
+	if ($AcceptEula) {
+		$DeviceInUseByProcessParams['AcceptEula'] = $True
 	}
 
 	$DeviceInUse = Get-DeviceInUseByProcess -Handle $Handle -PDO $PDO @DeviceInUseByProcessParams
