@@ -24,7 +24,7 @@ Function Get-DevicePDO {
 		[string]$FriendlyName
 	)
 	
-	if ($DeviceClass) {
+	if ($PSCmdlet.ParameterSetName -eq 'DeviceClass') {
 		foreach ($Class in $DeviceClass) {
 			[array]$DeviceClassWMIStrings += "DeviceClass='$Class'"
 		}
@@ -35,7 +35,7 @@ Function Get-DevicePDO {
 	}
 
 	Write-Debug "WMI Query '$Query'"
-	return Get-WmiObject -Query $Query | Select-Object FriendlyName,DeviceClass,PDO
+	return Get-CimInstance -Query $Query | Select-Object FriendlyName,DeviceClass,PDO
 }
 
 Function Get-DeviceInUseByProcess {
