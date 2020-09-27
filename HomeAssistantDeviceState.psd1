@@ -12,7 +12,7 @@
 RootModule = 'HomeAssistantDeviceState.psm1'
 
 # Version number of this module.
-ModuleVersion = '2020.9.25.1'
+ModuleVersion = '2020.9.27.1'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -72,7 +72,12 @@ RequiredModules = @('Microsoft.PowerShell.SecretsManagement')
 #FunctionsToExport = @()
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
-CmdletsToExport = @('Get-DeviceInUseByProcess','Get-DevicePhysicalDeviceObjectName','Set-HAEntityStateByDeviceInUse','Set-HAEntityStateByConsentStore')
+CmdletsToExport = @(
+	'Get-ContentStoreDeviceUsedBy',
+	'Get-DeviceInUseByProcess',
+	'Get-DevicePhysicalDeviceObjectName',
+	'Set-HAEntityStateByDeviceInUse',
+	'Set-HAEntityStateByConsentStore')
 
 # Variables to export from this module
 #VariablesToExport = '*'
