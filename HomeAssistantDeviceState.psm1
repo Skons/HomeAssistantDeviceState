@@ -1,5 +1,53 @@
 $Script:CurrentState = $null
 
+Function Get-ContentStoreDeviceUsedBy {
+	<#
+	.SYNOPSIS
+		List the executables and/or Store apps that used a device
+	.DESCRIPTION
+		List the executables and/or Store apps that used a device. If the type is an executable, the path is also provided
+	.EXAMPLE
+		Get-ContentStoreDeviceUsedBy
+	#>
+	[CmdLetBinding()]
+	Param()
+
+	$TemplateObject = '' | Select-Object Type,Path,Name,Device,LastUsedStartTime,LastUsedStopTime
+	$RegistryRoot = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore'
+	Write-Verbose "Getting devices from '$RegistryRoot'"
+	$Items = Get-ItemProperty $(join-path $RegistryRoot '\*\NonPackaged\*')
+	$Items | foreach-Object {
+		$Path = $_.PSChildName -replace '#','\'
+		$Object = $TemplateObject.PSObject.Copy()
+		$Object.Type = 'Executable'
+		$Object.Path = $Path | split-path
+		$Object.Name = $Path | split-path -leaf
+		$Object.Device = $_.PSParentPath | Split-Path | Split-Path -Leaf
+		$Object.LastUsedStartTime = [datetime]::FromFileTime($_.LastUsedTimeStart)
+		$Object.LastUsedStopTime = 0
+		if ($_.LastUsedTimeStop -ne 0) {
+			$Object.LastUsedStopTime = [datetime]::FromFileTime($_.LastUsedTimeStop)
+		}
+		$Object
+	}
+
+	$Items = Get-ItemProperty $(join-path $RegistryRoot '\*\*')
+	$Items | foreach-Object {
+		if ($_.LastUsedTimeStart) {
+			$Object = $TemplateObject.PSObject.Copy()
+			$Object.Type = 'StoreApp'
+			$Object.Name = $($_.PSChildName -split '_')[0]
+			$Object.Device = $_.PSParentPath | Split-Path -Leaf
+			$Object.LastUsedStartTime = [datetime]::FromFileTime($_.LastUsedTimeStart)
+			$Object.LastUsedStopTime = 0
+			if ($_.LastUsedTimeStop -ne 0) {
+				$Object.LastUsedStopTime = [datetime]::FromFileTime($_.LastUsedTimeStop)
+			}
+			$Object
+		}
+	}
+}
+
 Function Get-DevicePDO {
 	<#
 	.SYNOPSIS
@@ -291,8 +339,12 @@ Function Set-HAEntityStateByConsentStore {
 		Provide a device that is registered at HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore. By default de webcam and microphone are used
 	.PARAMETER Executable
 		IF you want a specific executable to be monitored
-	.PARAMETER Exclude
-		Provide this with one or more executables to exclude them from being monitord
+	.PARAMETER ExcludeExecutable
+		Provide this with one or more executables to exclude them from being monitored
+	.PARAMETER StoreApp
+		IF you want a specific store app to be monitored
+	.PARAMETER ExcludeStoreApp
+		Provide this with one or more store apps to exclude them from being monitored
 	.PARAMETER Uri
 		Uri to your homeassistant instance
 	.PARAMETER Entity
@@ -318,10 +370,14 @@ Function Set-HAEntityStateByConsentStore {
 	Param(
 		[Parameter(Mandatory=$False)]
 		[string[]]$Device=@('microphone','webcam'),
-		[Parameter(Mandatory=$True,ParameterSetName='Executable')]
+		[Parameter(Mandatory=$False)]
 		[string[]]$Executable,
-		[Parameter(Mandatory=$False,ParameterSetName='Executable')]
-		[switch]$Exclude,
+		[Parameter(Mandatory=$False)]
+		[switch]$ExcludeExecutable,
+		[Parameter(Mandatory=$False)]
+		[string[]]$StoreApp,
+		[Parameter(Mandatory=$False)]
+		[switch]$ExcludeStoreApp,
 		[Parameter(Mandatory=$True)]
 		[uri]$Uri,
 		[Parameter(Mandatory=$True)]
@@ -339,6 +395,10 @@ Function Set-HAEntityStateByConsentStore {
 		[Parameter(Mandatory=$False)]
 		[int]$Loop
 	)
+
+	if ($ExcludeExecutable -and $ExcludeStoreApp -and !$Executable -and !$StoreApp) {
+		Write-Error "-ExcludeExecutable and -ExcludeStoreApp are defined without -Executable and/or -StoreApp. This will not ennumerate any programs" -ErrorAction Stop
+	}
 
 	#Get the secret
 	$SecretParams = @{}
@@ -370,37 +430,67 @@ Function Set-HAEntityStateByConsentStore {
 		}
 
 		$StateToSend = $NotFoundStateValue
-		for ($i = 0; $i -lt $sids.count -and $StateToSend -eq $NotFoundStateValue; $i++) {
+		$TriggerApp = $null
+		for ($i = 0; $i -lt $sids.count -and $null -eq $TriggerApp; $i++) {
 			$Path = Join-Path 'HKU:' $sids[$i]
 			$RootPath = join-path $Path 'SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore'
-			for ($j = 0; $j -lt $Device.count -and $StateToSend -eq $NotFoundStateValue; $j++) {
+			for ($j = 0; $j -lt $Device.count -and $null -eq $TriggerApp; $j++) {
 				$DevicePath = join-path $RootPath $Device[$j]
-				$DevicePath = join-path $DevicePath "NonPackaged"
-				if (!$(test-path $DevicePath)) {
-					Write-Debug "The path '$DevicePath' does not exist"
-					continue
+				$NonPackaged = join-path $DevicePath 'NonPackaged'
+				$StoreApps = join-path $DevicePath '*'
+				$Items = @()
+				if ($(test-path $DevicePath)) {
+					if (!$(!$Executable -and $ExcludeExecutable)) {
+						Write-Debug "Ennumerating NonPackages executables registry '$NonPackaged'"
+						if ($(test-path $NonPackaged)) {
+							$NonPackegedValues = join-path $NonPackaged '*'
+							write-Debug  "Getting info from '$($NonPackegedValues)'"
+							$Items += $(Get-ItemProperty $NonPackegedValues -erroraction silentlycontinue | Where-Object {$_.LastUsedTimeStart -and $_.LastUsedTimeStop -eq 0})
+						}
+					}
+					else {
+						Write-Debug "Nonpackaged is skipped with -ExcludeExectuables"
+					}
+
+					if (!$(!$StoreApp -and $ExcludeStoreApp)) {
+						Write-Debug "Ennumerating store app registry '$StoreApps'"
+						$Items += $(Get-ItemProperty $StoreApps | Where-Object {$_.LastUsedTimeStart -and $_.LastUsedTimeStop -eq 0})
+					}
+					else {
+						Write-Debug "Store apps are skipped with -ExcludeStoreApps"
+					}
 				}
 
-				write-debug "Getting info from '$($DevicePath)'"
-				$Items = get-childitem $DevicePath
-				for ($k = 0; $k -lt $Items.count -and $StateToSend -eq $NotFoundStateValue; $k++) {
-					write-debug "Accessing '$($items[$k].PSPath)'"
-					$TimeStamps = get-itemproperty $items[$k].PSPath
-					if ($TimeStamps.LastUsedTimeStop -ne 0) { #Device is not in use
-						Continue
-					}
-						
-					Write-Debug "'$($TimeStamps.PSChildName)' is using the '$($Device[$j])' since '$([datetime]::FromFileTime($TimeStamps.LastUsedTimeStart))'"
-					$DeviceExecutable = $($TimeStamps.PSChildName -split "#")[-1]
-					if ($Exclude -and $DeviceExecutable -in $Executable) {
-						Write-Debug "Found '$DeviceExecutable' in use, but it is excluded"
-					}
-					elseif (!$Executable -or (!$Exclude -and $DeviceExecutable -in $Executable) -or ($Exclude -and $DeviceExecutable -notin $Executable)) {
-						Write-Debug "Found '$DeviceExecutable' in use"
-						$StateToSend = $FoundStateValue
+				if ($Items) {
+					for ($k = 0; $k -lt $Items.count -and $null -eq $TriggerApp; $k++) {
+						write-debug "Accessing '$($Items[$k].PSPath)'"
+						#Get the executable name from the registry key
+						if ($Items[$k].PSPath -like '*\NonPackaged\*') {
+							Write-Debug "NonPackaged '$($Items[$k].PSChildName)' is using the '$($Device[$j])' since '$([datetime]::FromFileTime($Items[$k].LastUsedTimeStart))'"
+							$DeviceExecutable = $($Items[$k].PSChildName -split '#')[-1]
+							if ($ExcludeExecutable -and $DeviceExecutable -in $Executable) {
+								Write-Debug "Found '$DeviceExecutable' using the device '$($Device[$j])', but it is excluded"
+							}
+							elseif (!$Executable -or (!$ExcludeExecutable -and $DeviceExecutable -in $Executable) -or ($ExcludeExecutable -and $DeviceExecutable -notin $Executable)) {
+								Write-Debug "Found '$DeviceExecutable' using the device '$($Device[$j])'"
+								$StateToSend = $FoundStateValue
+								$TriggerApp = $DeviceExecutable
+							}
+						}
+						else {
+							Write-Debug "StoreApp '$($Items[$k].PSChildName)' is using the '$($Device[$j])' since '$([datetime]::FromFileTime($Items[$k].LastUsedTimeStart))'"
+							$StoreAppName = $($Items[$k].PSChildName -split '_')[0]
+							if ($ExcludeStoreApp -and $StoreAppName -in $StoreApp) {
+								Write-Debug "Found '$StoreAppName' using the device '$($Device[$j])', but it is excluded"
+							}
+							elseif (!$StoreApp -or (!$ExcludeStoreApp -and $StoreAppName -in $StoreApp) -or ($ExcludeStoreApp -and $StoreAppName -notin $StoreApp)) {
+								Write-Debug "Found '$StoreAppName' using the device '$($Device[$j])'"
+								$StateToSend = $FoundStateValue
+								$TriggerApp = $StoreAppName
+							}
+						}
 					}
 				}
-
 			}
 		}
 
@@ -417,6 +507,7 @@ Function Set-HAEntityStateByConsentStore {
 
 		#The current state of the entity is not correct, setting that state
 		if ($Script:CurrentState -ne $StateToSend) {
+			Write-Verbose "The state should be changed to '$StateToSend', triggered by '$TriggerApp'"
 			$Body = @"
 {
 	"state": "$StateToSend"
