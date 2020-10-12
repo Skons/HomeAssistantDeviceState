@@ -16,8 +16,8 @@ Add-Secret -name HAToken -Secret "Your Long Lived Access token"
 You will need an entity in Home Assistant, below there is an input_boolean entity that you can add. It is possible to have another type of entity, as long as the value can be set with -FoundValueState and -NotFoundValueState at the command Set-HAEntityStateByDeviceInUse. The command Set-HAEntityStateByDeviceInUse has only been tested with an input boolean.
 ```yaml
 input_boolean:
-  camera:
-    name: Camera
+  in_a_call:
+    name: In a call
     initial: off
     icon: mid:webcam
 ```
