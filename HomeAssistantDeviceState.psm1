@@ -338,13 +338,13 @@ Function Set-HAEntityStateByConsentStore {
 	.PARAMETER Device
 		Provide a device that is registered at HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore. By default de webcam and microphone are used
 	.PARAMETER Executable
-		IF you want a specific executable to be monitored
+		One or more executables that will be monitored
 	.PARAMETER ExcludeExecutable
-		Provide this with one or more executables to exclude them from being monitored
+		Enable to exclude executables. If -Executable is provided, those will be excluded.
 	.PARAMETER StoreApp
-		IF you want a specific store app to be monitored
+		One or more store apps can be added to include in the monitoring
 	.PARAMETER ExcludeStoreApp
-		Provide this with one or more store apps to exclude them from being monitored
+		Enable if you want to exclude the store apps. If -StoreApps has got values, those will be excluded.
 	.PARAMETER Uri
 		Uri to your homeassistant instance
 	.PARAMETER Entity
@@ -362,7 +362,7 @@ Function Set-HAEntityStateByConsentStore {
 	.PARAMETER Loop
 		This enables this CmdLet to loop. Set the milliseconds to wait for while this CmdLet loops.
 	.EXAMPLE
-		Set-HAEntityStateByConsentStore -executable speechrecognition.exe -exclude -Uri "http://hassio.local:8123/" -Entity 'input_boolean.in_a_call' -FoundStateValue 'On' -NotFoundStateValue 'Off' -SecretName HAToken -loop 5000 -verbose
+		Set-HAEntityStateByConsentStore -executable speechrecognition.exe -excludeexecutable -Uri "http://hassio.local:8123/" -Entity 'input_boolean.in_a_call' -FoundStateValue 'On' -NotFoundStateValue 'Off' -SecretName HAToken -loop 5000 -verbose
 	.EXAMPLE
 		Set-HAEntityStateByConsentStore -Uri "http://hassio.local:8123/" -Entity 'input_boolean.in_a_call' -FoundStateValue 'On' -NotFoundStateValue 'Off' -SecretName HAToken -loop 5000 -verbose
 	#>
