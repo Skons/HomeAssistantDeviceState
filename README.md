@@ -26,7 +26,7 @@ There are two methods 2 use, the ContentStore registry information and Handle.ex
 
 # ContentStore registry
 
-Create a ps1 file with the following contents beside the downloaded module. If you want to monitor for one or more executables add it at -Executable, add -Exclude if you want to exclude a specific executable from being monitored. The example below monitors for every executable and loops every 5 seconds.
+Create a ps1 file with the following contents beside the downloaded module. If you want to monitor explicit for one or more executables add it at -Executable, add -Exclude to exclude the -Executable from being monitord. The example below monitors for every executable.
 
 ```Powershell
 start-transcript "$PSScriptRoot\HomeAssistantDeviceState.log"
@@ -34,10 +34,17 @@ $VerbosePreference = 'Continue'
 
 Import-Module $PSScriptRoot\HomeAssistantDeviceState.psd1
 
-Set-HAEntityStateByConsentStore -Uri "http://hassio.local:8123/" -Entity 'input_boolean.in_a_call' -FoundStateValue 'On' -NotFoundStateValue 'Off' -SecretName HAToken -loop 5000 -verbose
+Set-HAEntityStateByConsentStore -Uri "http://hassio.local:8123/" -Entity 'input_boolean.in_a_call' -FoundStateValue 'On' -NotFoundStateValue 'Off' -SecretName HAToken -verbose
 
 stop-transcript
 ```
+
+# Shortcut
+The ConentStore method can best be started through a shortcut in the startup folder, use c:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\ if you want to start it for all users. Create a new shortcut and point it to
+```
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -windowstyle hidden -nop -exec bypass -command "& 'Path\To\PowershellScript.ps1'"
+```
+Only Powershell 5 can be used.
 
 # Handle.exe
 Download handle.exe from https://docs.microsoft.com/en-us/sysinternals/downloads/handle. After downloading you should execute one of the executables to accept the EULA. The CmdLets that require handle.exe as parameter, also have -accepteula as parameter. Every user that runs handle.exe should also accept the sysinternals eula.
@@ -82,8 +89,8 @@ This ps1 looks for \Device\00000060 in the process svchost. The ProcessName can 
  Get-DeviceInUseByProcess -Handle .\handle64.exe -PDO \device\0000600 -Verbose
  ```
 
-# Scheduled task
-The ps1 created for both methods can be used to be started through the task scheduler. Point the action to powershell/pwsh with the arguments below and run in as the same user that will use the device. You can also run it as SYSTEM, but then you will have to add the secret as SYSTEM. This can be done with psexec, or you can run the .ps1 one time as SYSTEM with Add-Secret.
+# Handle scheduled task
+The ps1 created for the Handle method can be used to start through the task scheduler. Point the action to powershell/pwsh with the arguments below and run in as the same user that will use the device. You can also run it as SYSTEM, but then you will have to add the secret as SYSTEM. This can be done with psexec, or you can run the .ps1 one time as SYSTEM with Add-Secret.
 ```
 -nop -exec bypass -command "& 'Path\To\PowershellScript.ps1'"
 ```
