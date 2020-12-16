@@ -359,12 +359,10 @@ Function Set-HAEntityStateByConsentStore {
 		The name of the secret in your vault that has the HA Long Lived Access Token
 	.PARAMETER Force
 		If you want to force check the current state at HA, instead of relying on the state in memory of this module, specify this parameter
-	.PARAMETER Loop
-		This enables this CmdLet to loop. Set the milliseconds to wait for while this CmdLet loops.
 	.EXAMPLE
-		Set-HAEntityStateByConsentStore -executable speechrecognition.exe -excludeexecutable -Uri "http://hassio.local:8123/" -Entity 'input_boolean.in_a_call' -FoundStateValue 'On' -NotFoundStateValue 'Off' -SecretName HAToken -loop 5000 -verbose
+		Set-HAEntityStateByConsentStore -executable speechrecognition.exe -excludeexecutable -Uri "http://hassio.local:8123/" -Entity 'input_boolean.in_a_call' -FoundStateValue 'On' -NotFoundStateValue 'Off' -SecretName HAToken -verbose
 	.EXAMPLE
-		Set-HAEntityStateByConsentStore -Uri "http://hassio.local:8123/" -Entity 'input_boolean.in_a_call' -FoundStateValue 'On' -NotFoundStateValue 'Off' -SecretName HAToken -loop 5000 -verbose
+		Set-HAEntityStateByConsentStore -Uri "http://hassio.local:8123/" -Entity 'input_boolean.in_a_call' -FoundStateValue 'On' -NotFoundStateValue 'Off' -SecretName HAToken -verbose
 	#>
 	[CmdLetBinding(DefaultParameterSetName='__AllParameterSets')]
 	Param(
@@ -391,9 +389,7 @@ Function Set-HAEntityStateByConsentStore {
 		[Parameter(Mandatory=$True)]
 		[string]$SecretName,
 		[Parameter(Mandatory=$False)]
-		[switch]$Force,
-		[Parameter(Mandatory=$False)]
-		[int]$Loop
+		[switch]$Force
 	)
 
 	if ($ExcludeExecutable -and $ExcludeStoreApp -and !$Executable -and !$StoreApp) {
@@ -416,78 +412,76 @@ Function Set-HAEntityStateByConsentStore {
 		Write-Verbose "'HKU' is not mapped, mapping it now"
 		New-PSDrive -PSProvider Registry -Name HKU -Root HKEY_USERS | out-null
 	}
+	
+	$objuser = New-Object System.Security.Principal.NTAccount($env:username)
+	$SID = $objuser.Translate([System.Security.Principal.SecurityIdentifier]).Value
+	$RootPath = "$SID\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore"
+	$FullPath = join-path 'HKU:' $RootPath
+	
+	if (!$(test-path $FullPath)) {
+		Throw "'$FullPath' does not exist"
+	}
 
+	$First = $True
 	while ($True) {
-		if ($env:username.trimend('$') -eq $env:computername) { #Get all sids from HKU
-			$HKUItems = get-childitem hku:
-			$SidsTemp = $HKUItems.name -like '*\s-1-*'
-			$SidsTemp = $SidsTemp -notlike '*_classes'
-			[array]$Sids = $SidsTemp | foreach-object {$($_.split('\'))[1]}
-		}
-		else { #Get the sid of the current user
-			$objuser = New-Object System.Security.Principal.NTAccount($env:username)
-			[array]$sids += $objuser.Translate([System.Security.Principal.SecurityIdentifier]).Value
-		}
-
 		$StateToSend = $NotFoundStateValue
 		$TriggerApp = $null
-		for ($i = 0; $i -lt $sids.count -and $null -eq $TriggerApp; $i++) {
-			$Path = Join-Path 'HKU:' $sids[$i]
-			$RootPath = join-path $Path 'SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore'
-			for ($j = 0; $j -lt $Device.count -and $null -eq $TriggerApp; $j++) {
-				$DevicePath = join-path $RootPath $Device[$j]
-				$NonPackaged = join-path $DevicePath 'NonPackaged'
-				$StoreApps = join-path $DevicePath '*'
-				$Items = @()
-				if ($(test-path $DevicePath)) {
-					if (!$(!$Executable -and $ExcludeExecutable)) {
-						Write-Debug "Ennumerating NonPackages executables registry '$NonPackaged'"
-						if ($(test-path $NonPackaged)) {
-							$NonPackegedValues = join-path $NonPackaged '*'
-							write-Debug  "Getting info from '$($NonPackegedValues)'"
-							$Items += $(Get-ItemProperty $NonPackegedValues -erroraction silentlycontinue | Where-Object {$_.LastUsedTimeStart -and $_.LastUsedTimeStop -eq 0})
-						}
-					}
-					else {
-						Write-Debug "Nonpackaged is skipped with -ExcludeExectuables"
-					}
 
-					if (!$(!$StoreApp -and $ExcludeStoreApp)) {
-						Write-Debug "Ennumerating store app registry '$StoreApps'"
-						$Items += $(Get-ItemProperty $StoreApps | Where-Object {$_.LastUsedTimeStart -and $_.LastUsedTimeStop -eq 0})
-					}
-					else {
-						Write-Debug "Store apps are skipped with -ExcludeStoreApps"
+		$Path = Join-Path 'HKU:' $SID
+		
+		for ($j = 0; $j -lt $Device.count -and $null -eq $TriggerApp; $j++) {
+			$DevicePath = join-path $FullPath $Device[$j]
+			$NonPackaged = join-path $DevicePath 'NonPackaged'
+			$StoreApps = join-path $DevicePath '*'
+			$Items = @()
+			if ($(test-path $DevicePath)) {
+				if (!$(!$Executable -and $ExcludeExecutable)) {
+					Write-Debug "Ennumerating NonPackages executables registry '$NonPackaged'"
+					if ($(test-path $NonPackaged)) {
+						$NonPackegedValues = join-path $NonPackaged '*'
+						write-Debug  "Getting info from '$($NonPackegedValues)'"
+						$Items += $(Get-ItemProperty $NonPackegedValues -erroraction silentlycontinue | Where-Object {$_.LastUsedTimeStart -and $_.LastUsedTimeStop -eq 0})
 					}
 				}
+				else {
+					Write-Debug "Nonpackaged is skipped with -ExcludeExectuables"
+				}
 
-				if ($Items) {
-					for ($k = 0; $k -lt $Items.count -and $null -eq $TriggerApp; $k++) {
-						write-debug "Accessing '$($Items[$k].PSPath)'"
-						#Get the executable name from the registry key
-						if ($Items[$k].PSPath -like '*\NonPackaged\*') {
-							Write-Debug "NonPackaged '$($Items[$k].PSChildName)' is using the '$($Device[$j])' since '$([datetime]::FromFileTime($Items[$k].LastUsedTimeStart))'"
-							$DeviceExecutable = $($Items[$k].PSChildName -split '#')[-1]
-							if ($ExcludeExecutable -and $DeviceExecutable -in $Executable) {
-								Write-Debug "Found '$DeviceExecutable' using the device '$($Device[$j])', but it is excluded"
-							}
-							elseif (!$Executable -or (!$ExcludeExecutable -and $DeviceExecutable -in $Executable) -or ($ExcludeExecutable -and $DeviceExecutable -notin $Executable)) {
-								Write-Debug "Found '$DeviceExecutable' using the device '$($Device[$j])'"
-								$StateToSend = $FoundStateValue
-								$TriggerApp = $DeviceExecutable
-							}
+				if (!$(!$StoreApp -and $ExcludeStoreApp)) {
+					Write-Debug "Ennumerating store app registry '$StoreApps'"
+					$Items += $(Get-ItemProperty $StoreApps | Where-Object {$_.LastUsedTimeStart -and $_.LastUsedTimeStop -eq 0})
+				}
+				else {
+					Write-Debug "Store apps are skipped with -ExcludeStoreApps"
+				}
+			}
+
+			if ($Items) {
+				for ($k = 0; $k -lt $Items.count -and $null -eq $TriggerApp; $k++) {
+					write-debug "Accessing '$($Items[$k].PSPath)'"
+					#Get the executable name from the registry key
+					if ($Items[$k].PSPath -like '*\NonPackaged\*') {
+						Write-Debug "NonPackaged '$($Items[$k].PSChildName)' is using the '$($Device[$j])' since '$([datetime]::FromFileTime($Items[$k].LastUsedTimeStart))'"
+						$DeviceExecutable = $($Items[$k].PSChildName -split '#')[-1]
+						if ($ExcludeExecutable -and $DeviceExecutable -in $Executable) {
+							Write-Debug "Found '$DeviceExecutable' using the device '$($Device[$j])', but it is excluded"
 						}
-						else {
-							Write-Debug "StoreApp '$($Items[$k].PSChildName)' is using the '$($Device[$j])' since '$([datetime]::FromFileTime($Items[$k].LastUsedTimeStart))'"
-							$StoreAppName = $($Items[$k].PSChildName -split '_')[0]
-							if ($ExcludeStoreApp -and $StoreAppName -in $StoreApp) {
-								Write-Debug "Found '$StoreAppName' using the device '$($Device[$j])', but it is excluded"
-							}
-							elseif (!$StoreApp -or (!$ExcludeStoreApp -and $StoreAppName -in $StoreApp) -or ($ExcludeStoreApp -and $StoreAppName -notin $StoreApp)) {
-								Write-Debug "Found '$StoreAppName' using the device '$($Device[$j])'"
-								$StateToSend = $FoundStateValue
-								$TriggerApp = $StoreAppName
-							}
+						elseif (!$Executable -or (!$ExcludeExecutable -and $DeviceExecutable -in $Executable) -or ($ExcludeExecutable -and $DeviceExecutable -notin $Executable)) {
+							Write-Debug "Found '$DeviceExecutable' using the device '$($Device[$j])'"
+							$StateToSend = $FoundStateValue
+							$TriggerApp = $DeviceExecutable
+						}
+					}
+					else {
+						Write-Debug "StoreApp '$($Items[$k].PSChildName)' is using the '$($Device[$j])' since '$([datetime]::FromFileTime($Items[$k].LastUsedTimeStart))'"
+						$StoreAppName = $($Items[$k].PSChildName -split '_')[0]
+						if ($ExcludeStoreApp -and $StoreAppName -in $StoreApp) {
+							Write-Debug "Found '$StoreAppName' using the device '$($Device[$j])', but it is excluded"
+						}
+						elseif (!$StoreApp -or (!$ExcludeStoreApp -and $StoreAppName -in $StoreApp) -or ($ExcludeStoreApp -and $StoreAppName -notin $StoreApp)) {
+							Write-Debug "Found '$StoreAppName' using the device '$($Device[$j])'"
+							$StateToSend = $FoundStateValue
+							$TriggerApp = $StoreAppName
 						}
 					}
 				}
@@ -522,9 +516,16 @@ Function Set-HAEntityStateByConsentStore {
 			}
 			write-Verbose $($Response | out-string)
 		}
-		if (!$Loop) {
-			break
-		}
-		start-sleep -milliseconds $Loop
+
+		#Register the wait for change last, so on launch the state can be set correct
+		$Query = "Select * from RegistryTreeChangeEvent WHERE Hive='HKEY_USERS' AND RootPath='$($RootPath -replace '\\','\\')'"
+		$SourceIdentifier = 'ConsentStore'
+
+		Register-WMIEvent -Query $Query -SourceIdentifier $SourceIdentifier -ErrorAction SilentlyContinue
+		
+		Wait-Event -SourceIdentifier $SourceIdentifier | out-null
+		Remove-Event -SourceIdentifier $SourceIdentifier | out-null
+
+		Unregister-Event -SourceIdentifier $SourceIdentifier | out-null
 	}
 }
