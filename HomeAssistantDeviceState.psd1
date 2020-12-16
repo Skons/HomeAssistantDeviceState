@@ -12,7 +12,7 @@
 RootModule = 'HomeAssistantDeviceState.psm1'
 
 # Version number of this module.
-ModuleVersion = '2020.9.27.1'
+ModuleVersion = '2020.12.16.1'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
