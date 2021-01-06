@@ -422,6 +422,10 @@ Function Set-HAEntityStateByConsentStore {
 		Throw "'$FullPath' does not exist"
 	}
 
+	#Register the wait for change last, so on launch the state can be set correct
+	$Query = "Select * from RegistryTreeChangeEvent WHERE Hive='HKEY_USERS' AND RootPath='$($RootPath -replace '\\','\\')'"
+	$SourceIdentifier = 'ConsentStore'
+
 	$First = $True
 	while ($True) {
 		$StateToSend = $NotFoundStateValue
@@ -517,15 +521,11 @@ Function Set-HAEntityStateByConsentStore {
 			write-Verbose $($Response | out-string)
 		}
 
-		#Register the wait for change last, so on launch the state can be set correct
-		$Query = "Select * from RegistryTreeChangeEvent WHERE Hive='HKEY_USERS' AND RootPath='$($RootPath -replace '\\','\\')'"
-		$SourceIdentifier = 'ConsentStore'
-
 		Register-WMIEvent -Query $Query -SourceIdentifier $SourceIdentifier -ErrorAction SilentlyContinue
 		
-		Wait-Event -SourceIdentifier $SourceIdentifier | out-null
-		Remove-Event -SourceIdentifier $SourceIdentifier | out-null
+		Wait-Event -SourceIdentifier $SourceIdentifier -Timeout 30 | out-null
+		Remove-Event -SourceIdentifier $SourceIdentifier -ErrorAction SilentlyContinue | out-null
 
-		Unregister-Event -SourceIdentifier $SourceIdentifier | out-null
 	}
+	Unregister-Event -SourceIdentifier $SourceIdentifier | out-null
 }
